@@ -1,0 +1,84 @@
+name: Deploy Wuri TT Test Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Source repository branch, tag, or commit SHA
+        required: true
+        default: main
+  repository_dispatch:
+    types: [deploy-test]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: test-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve source ref
+        id: source
+        env:
+          DISPATCH_REF: ${{ github.event.client_payload.source_ref }}
+          INPUT_REF: ${{ inputs.source_ref }}
+        run: |
+          ref="${INPUT_REF:-${DISPATCH_REF:-main}}"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+      - name: Checkout canonical source repository
+        uses: actions/checkout@v6
+        with:
+          repository: bollinmore-hermes/wuri-table-tennis-league
+          ref: ${{ steps.source.outputs.ref }}
+          path: source
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+      - name: Install dependencies
+        working-directory: source
+        run: npm ci
+      - name: Run tests
+        working-directory: source
+        run: npm test
+      - name: Build fail-closed Test Pages artifact
+        working-directory: source
+        env:
+          SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
+          SUPABASE_TEST_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_TEST_PUBLISHABLE_KEY }}
+        run: npm run build:test-pages
+      - name: Verify Test artifact identity
+        working-directory: source
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const config=fs.readFileSync('test-pages-dist/assets/js/config.js','utf8');
+          if(!config.includes('"environment": "test"'))throw new Error('Test environment marker missing');
+          if(!config.includes('"projectRef": "vppjcjfbcoxzofcuxmzz"'))throw new Error('Unexpected Test project ref');
+          if(config.includes('zofiiibgnjuodgrzhkpn'))throw new Error('Production project leaked into Test artifact');
+          NODE
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: source/test-pages-dist
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
