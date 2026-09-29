@@ -18,4 +18,4 @@
 
 Test workflow 可從正式原始碼 Repository 取用指定的分支、Git Tag 或 Commit，完成測試後產生測試網站。測試部署**不要求 Git Tag**；只有正式 Production 發布必須使用已有 Git Tag 的版本。
 
-若發現安全問題，請透過正式原始碼 Repository 的 GitHub 私密安全回報機制通知維護者，不要在公開 Issue 揭露敏感細節。
+若發現安全問題，請先透過既有的團體聯絡管道通知維護者，不要在公開 Issue 揭露敏感細節。
